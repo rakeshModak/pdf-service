@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  html-to-pdf-api:
+    build: .
+    container_name: html-to-pdf-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TZ=Asia/Kolkata
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    shm_size: '2gb'
+    mem_limit: 3g
+    cpus: 2.0
+    volumes:
+      - /var/log/pm2:/var/log/pm2
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
