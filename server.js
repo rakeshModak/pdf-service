@@ -247,7 +247,7 @@ app.post('/convert-image', async (req, res) => {
   let browser;
 
   try {
-    const { html, imageType = 'png', options = {} } = req.body;
+    const { html, imageType = 'png', viewport, options = {} } = req.body;
 
     if (!html) {
       return res.status(400).json({
@@ -308,7 +308,13 @@ app.post('/convert-image', async (req, res) => {
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 800 });
+
+    // Initial viewport — caller can pin one; otherwise use a sane default
+    // and auto-fit to content after render.
+    const initialViewport = viewport && viewport.width && viewport.height
+      ? viewport
+      : { width: 1122, height: 794 };
+    await page.setViewport(initialViewport);
 
     await page.setContent(html, {
       waitUntil: ['networkidle0', 'domcontentloaded'],
@@ -324,6 +330,33 @@ app.post('/convert-image', async (req, res) => {
         }
       });
     });
+
+    // Auto-fit viewport to actual rendered content size so we don't
+    // get empty bands when the document is narrower/shorter than 1280x800.
+    if (!viewport) {
+      const contentSize = await page.evaluate(() => {
+        const doc = document.documentElement;
+        const body = document.body;
+        return {
+          width: Math.ceil(Math.max(
+            doc.scrollWidth, body ? body.scrollWidth : 0,
+            doc.offsetWidth, body ? body.offsetWidth : 0
+          )),
+          height: Math.ceil(Math.max(
+            doc.scrollHeight, body ? body.scrollHeight : 0,
+            doc.offsetHeight, body ? body.offsetHeight : 0
+          ))
+        };
+      });
+
+      if (contentSize.width > 0 && contentSize.height > 0) {
+        await page.setViewport({
+          width: contentSize.width,
+          height: contentSize.height,
+          deviceScaleFactor: initialViewport.deviceScaleFactor || 1
+        });
+      }
+    }
 
     const image = await page.screenshot(screenshotOptions);
 
